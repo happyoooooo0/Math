@@ -1,0 +1,119 @@
+
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>二维矩阵变换：正方形 x → Ax</title>
+    <style>
+        body { font-family: Arial; max-width: 900px; margin: 20px auto; padding: 20px; }
+        input { width: 60px; padding: 6px; margin: 4px; text-align: center; }
+        #side { width: 100px; }
+        button { padding: 10px 26px; background:#28a745; color:white; border:none; border-radius:6px; cursor:pointer; font-size:16px; margin-top:10px; }
+        #result { margin-top:20px; padding:14px; background:#f8f9fa; border-radius:8px; font-size:15px; line-height:1.6; }
+        #canvas { width:100%; height:500px; border:1px solid #eee; background:white; margin-top:20px; }
+    </style>
+</head>
+<body>
+    <h2>📌 二维矩阵变换：正方形 x → 变换图形 Ax</h2>
+    <p>设置边长 → 输入2×2矩阵 → 画出原始正方形与变换后的图形</p>
+
+    <div>
+        <h4>📐 2×2矩阵 A</h4>
+        <input id="a" value="1"> <input id="b" value="0"><br>
+        <input id="c" value="0"> <input id="d" value="1">
+    </div>
+
+    <div style="margin-top:16px;">
+        <h4>⬜ 正方形 x 边长</h4>
+        <input id="side" value="2">
+    </div>
+
+    <button onclick="draw()">计算并绘制</button>
+    <div id="result"></div>
+    <canvas id="canvas"></canvas>
+
+<script>
+function draw() {
+    const a = parseFloat(document.getElementById('a').value) || 0;
+    const b = parseFloat(document.getElementById('b').value) || 0;
+    const c = parseFloat(document.getElementById('c').value) || 0;
+    const d = parseFloat(document.getElementById('d').value) || 0;
+    const s = parseFloat(document.getElementById('side').value) || 2;
+    const half = s / 2;
+
+    document.getElementById('result').innerText = 
+`正方形 x 边长：${s}
+矩阵 A：
+[ ${a}   ${b} ]
+[ ${c}   ${d} ]
+
+🔵 深蓝：原始正方形 x
+🔴 红色：矩阵变换后 Ax`;
+
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+    const W = canvas.clientWidth;
+    const H = canvas.clientHeight;
+    canvas.width = W;
+    canvas.height = H;
+    ctx.clearRect(0,0,W,H);
+
+    const cx = W/2;
+    const cy = H/2;
+    const scale = 80;
+    const grid = 40;
+
+    // 网格
+    ctx.strokeStyle = '#e0e0e0';
+    ctx.lineWidth = 1;
+    for (let x=0;x<=W;x+=grid) { ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,H); ctx.stroke(); }
+    for (let y=0;y<=H;y+=grid) { ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(W,y); ctx.stroke(); }
+
+    // 坐标轴
+    ctx.strokeStyle = '#333';
+    ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(0,cy); ctx.lineTo(W-20,cy); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(cx,H); ctx.lineTo(cx,20); ctx.stroke();
+
+    // 坐标轴箭头
+    ctx.fillStyle = '#333';
+    ctx.beginPath(); ctx.moveTo(W-20,cy); ctx.lineTo(W-30,cy-5); ctx.lineTo(W-30,cy+5); ctx.closePath(); ctx.fill();
+    ctx.beginPath(); ctx.moveTo(cx,20); ctx.lineTo(cx-5,30); ctx.lineTo(cx+5,30); ctx.closePath(); ctx.fill();
+
+    // 四个顶点（中心在原点的正方形）
+    const points = [
+        [-half, -half],
+        [ half, -half],
+        [ half,  half],
+        [-half,  half]
+    ];
+
+    // 画原始正方形（深蓝）
+    ctx.strokeStyle = '#003366';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    points.forEach(([x,y], i) => {
+        const px = cx + x * scale;
+        const py = cy - y * scale;
+        i === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py);
+    });
+    ctx.closePath();
+    ctx.stroke();
+
+    // 画变换后图形（红色）
+    ctx.strokeStyle = '#d62728';
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    points.forEach(([x,y], i) => {
+        const u = a * x + b * y;
+        const v = c * x + d * y;
+        const px = cx + u * scale;
+        const py = cy - v * scale;
+        i === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py);
+    });
+    ctx.closePath();
+    ctx.stroke();
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>3×3矩阵 × 三维向量 计算器（放大版）</title>
+    <style>
+        body { font-family: "Microsoft YaHei", sans-serif; max-width: 1200px; margin: 20px auto; padding: 20px; }
+        .input-box { margin-bottom: 20px; padding: 15px; border: 1px solid #eee; border-radius: 8px; background: #fafafa; }
+        input { width: 60px; padding: 8px; margin: 5px; text-align: center; border: 1px solid #ccc; border-radius: 4px; font-size: 14px; }
+        button { 
+            background: #28a745; color: white; border: none; 
+            padding: 10px 25px; border-radius: 6px; cursor: pointer; font-size: 16px;
+        }
+        button:hover { background: #218838; }
+        #result { 
+            margin: 20px 0; padding: 15px; 
+            background: #f8f9fa; border-radius: 8px; 
+            font-size: 16px; white-space: pre-line; line-height: 1.6;
+        }
+        #vectorCanvas { 
+            width: 100%; 
+            height: 500px; /* 增加画布高度，放大整体图 */
+            border: 1px solid #eee; 
+            border-radius: 8px;
+            background: #ffffff;
+        }
+    </style>
+</head>
+<body>
+    <h1>📊 3×3矩阵 × 三维向量 (x,y,z) 计算器</h1>
+    <p>输入3×3矩阵和三维向量，点击计算，自动绘制3D空间向量（蓝色=原始，红色=变换后）</p>
+
+    <div class="input-box">
+        <h4>🔢 3×3矩阵</h4>
+        <input id="m00" value="1" step="any"> <input id="m01" value="2" step="any"> <input id="m02" value="-1" step="any"><br>
+        <input id="m10" value="2" step="any"> <input id="m11" value="1" step="any"> <input id="m12" value="0" step="any"><br>
+        <input id="m20" value="-1" step="any"> <input id="m21" value="2" step="any"> <input id="m22" value="1" step="any">
+    </div>
+
+    <div class="input-box">
+        <h4>📌 三维向量 (x, y, z)</h4>
+        <input id="vx" value="1" step="any"> <input id="vy" value="1" step="any"> <input id="vz" value="1" step="any">
+    </div>
+
+    <button onclick="calculateAndDraw3D()">计算并绘制3D向量</button>
+    <div id="result">请点击计算按钮...</div>
+    <canvas id="vectorCanvas"></canvas>
+
+    <script>
+        let canvasW = 1200, canvasH = 800;
+
+        function calculateAndDraw3D() {
+            // 1. 读取矩阵
+            const m00 = parseFloat(document.getElementById("m00").value)||0
+            const m01 = parseFloat(document.getElementById("m01").value)||0
+            const m02 = parseFloat(document.getElementById("m02").value)||0
+            const m10 = parseFloat(document.getElementById("m10").value)||0
+            const m11 = parseFloat(document.getElementById("m11").value)||0
+            const m12 = parseFloat(document.getElementById("m12").value)||0
+            const m20 = parseFloat(document.getElementById("m20").value)||0
+            const m21 = parseFloat(document.getElementById("m21").value)||0
+            const m22 = parseFloat(document.getElementById("m22").value)||0
+
+            // 2. 读取向量
+            const x = parseFloat(document.getElementById("vx").value)||0
+            const y = parseFloat(document.getElementById("vy").value)||0
+            const z = parseFloat(document.getElementById("vz").value)||0
+
+            // 3. 矩阵乘法：3×3 × 三维向量
+            const rx = m00*x + m01*y + m02*z
+            const ry = m10*x + m11*y + m12*z
+            const rz = m20*x + m21*y + m22*z
+
+            // 4. 显示结果
+            document.getElementById("result").innerText = 
+`📝 计算结果:
+原始向量：(${x}, ${y}, ${z})
+矩阵：
+[ ${m00}, ${m01}, ${m02} ]
+[ ${m10}, ${m11}, ${m12} ]
+[ ${m20}, ${m21}, ${m22} ]
+
+结果向量：(${rx.toFixed(2)}, ${ry.toFixed(2)}, ${rz.toFixed(2)})
+
+🔵 蓝色：原始向量（与坐标轴同一比例尺，长度随 |v| 变化）
+🔴 红色：变换后向量（与坐标轴同一比例尺，长度随 |Mv| 变化）`
+
+            // ================= 绘制3D向量图 =================
+            const canvas = document.getElementById("vectorCanvas")
+            const ctx = canvas.getContext("2d")
+            
+            // 自适应画布尺寸，放大整体
+            canvasW = canvas.clientWidth;
+            canvasH = canvas.clientHeight;
+            canvas.width = canvasW;
+            canvas.height = canvasH;
+            ctx.clearRect(0, 0, canvasW, canvasH);
+
+            // 原点在画布中心
+            const cx = canvasW / 2;
+            const cy = canvasH / 2;
+
+            // 坐标系（网格+轴）固定比例，仅由画布尺寸决定，不随向量模长变化
+            const gridRange = 6;
+            const axisScale = Math.min(canvasW, canvasH) / 13;
+            // 向量与坐标轴共用世界单位；vecLenBoost 仅作整体可视微调
+            const vecLenBoost = 1.45;
+            const scaleVec = axisScale * vecLenBoost;
+
+            // 先绕世界 Y 轴旋转视角（线性），再作标准等轴测正投影，保证向量加法、与坐标轴关系正确；
+            // 纯等轴测下方向 (1,1,1) 会投影为一点，故不能靠给 x2d 加 (px+py+pz) 等非线性项「修」。
+            const SQRT3_2 = 0.8660254037844386;
+            const viewYaw = 0.22;
+            const cosY = Math.cos(viewYaw);
+            const sinY = Math.sin(viewYaw);
+            function worldToView(px, py, pz) {
+                return {
+                    vx: px * cosY + pz * sinY,
+                    vy: py,
+                    vz: -px * sinY + pz * cosY
+                };
+            }
+            function proj(px, py, pz, scale) {
+                const { vx, vy, vz } = worldToView(px, py, pz);
+                const x2d = (vx - vy) * SQRT3_2;
+                const y2d = (-vx - vy) * 0.5 + vz;
+                return [
+                    cx + x2d * scale,
+                    cy - y2d * scale
+                ];
+            }
+
+            // --- 绘制3D网格（同步放大）---
+            ctx.strokeStyle = '#e0e0e0';
+            ctx.lineWidth = 1;
+            for (let i = -gridRange; i <= gridRange; i++) {
+                let [x1, y1] = proj(i, -gridRange, 0, axisScale);
+                let [x2, y2] = proj(i, gridRange, 0, axisScale);
+                ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+                [x1, y1] = proj(-gridRange, i, 0, axisScale);
+                [x2, y2] = proj(gridRange, i, 0, axisScale);
+                ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+            }
+
+            // --- 绘制3D坐标轴（带箭头，放大）---
+            ctx.strokeStyle = '#333';
+            ctx.lineWidth = 2;
+            const axisLen = gridRange;
+            // X轴
+            let [xEnd, yEnd] = proj(axisLen, 0, 0, axisScale);
+            ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(xEnd, yEnd); ctx.stroke();
+            drawArrow(ctx, cx, cy, xEnd, yEnd, '#333', 2, true);
+            ctx.fillStyle = '#333'; ctx.font = '18px Arial'; ctx.fillText('X', xEnd + 10, yEnd);
+
+            // Y轴
+            let [yEndX, yEndY] = proj(0, axisLen, 0, axisScale);
+            ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(yEndX, yEndY); ctx.stroke();
+            drawArrow(ctx, cx, cy, yEndX, yEndY, '#333', 2, true);
+            ctx.fillText('Y', yEndX + 10, yEndY);
+
+            // Z轴
+            let [zEndX, zEndY] = proj(0, 0, axisLen, axisScale);
+            ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(zEndX, zEndY); ctx.stroke();
+            drawArrow(ctx, cx, cy, zEndX, zEndY, '#333', 2, true);
+            ctx.fillText('Z', zEndX + 10, zEndY);
+
+            /** 从原点指向 (px,py,pz) 的单向向量箭头（数学上更直观） */
+            function drawVectorFromOrigin(px, py, pz, color, lineWidth, scale) {
+                const len3 = Math.sqrt(px * px + py * py + pz * pz);
+                if (len3 < 1e-12) return;
+                const [ex, ey] = proj(px, py, pz, scale);
+                const dx = ex - cx, dy = ey - cy;
+                const screenLen = Math.sqrt(dx * dx + dy * dy);
+                if (screenLen < 1e-6) return;
+
+                ctx.strokeStyle = color;
+                ctx.lineWidth = lineWidth;
+                ctx.lineCap = 'round';
+                ctx.lineJoin = 'round';
+                ctx.beginPath();
+                ctx.moveTo(cx, cy);
+                ctx.lineTo(ex, ey);
+                ctx.stroke();
+
+                drawArrow(ctx, cx, cy, ex, ey, color, lineWidth, false);
+            }
+
+            /**
+             * 箭头头部：等腰三角形，长度随线段在屏幕上的长度与线宽自适应，
+             * 可选描边使尖端在浅色背景上更清晰。
+             */
+            function drawArrow(ctx, x1, y1, x2, y2, color, lineWidth, axisStyle) {
+                const angle = Math.atan2(y2 - y1, x2 - x1);
+                const dx = x2 - x1, dy = y2 - y1;
+                const lineLen = Math.sqrt(dx * dx + dy * dy);
+                const halfAngle = Math.PI / 7;
+                let headLen = axisStyle
+                    ? Math.min(canvasW, canvasH) / 40
+                    : Math.min(lineLen * 0.14, canvasW / 18, Math.max(lineWidth * 5, 10));
+                headLen = Math.min(headLen, lineLen * 0.45);
+
+                const hx = x2 - headLen * Math.cos(angle);
+                const hy = y2 - headLen * Math.sin(angle);
+                const wing = headLen * Math.tan(halfAngle);
+
+                const px = -Math.sin(angle), py = Math.cos(angle);
+                const lx = hx + wing * px, ly = hy + wing * py;
+                const rx = hx - wing * px, ry = hy - wing * py;
+
+                ctx.fillStyle = color;
+                ctx.beginPath();
+                ctx.moveTo(x2, y2);
+                ctx.lineTo(lx, ly);
+                ctx.lineTo(rx, ry);
+                ctx.closePath();
+                ctx.fill();
+                if (!axisStyle) {
+                    ctx.strokeStyle = color;
+                    ctx.lineWidth = Math.max(1, lineWidth * 0.35);
+                    ctx.stroke();
+                }
+            }
+
+            // 🔵 原始向量（蓝色，与轴同比例尺）
+            drawVectorFromOrigin(x, y, z, '#003366', 10, scaleVec);
+            // 🔴 变换后向量（红色，与轴同比例尺）
+            drawVectorFromOrigin(rx, ry, rz, '#d62728', 5, scaleVec);
+        }
+
+        window.addEventListener('resize', calculateAndDraw3D);
+    </script>
+</body>
+</html>
