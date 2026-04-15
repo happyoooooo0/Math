@@ -1,0 +1,558 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>行列式&线性方程组求解计算器（2/3阶）</title>
+    <style>
+        body {
+            font-family: "Microsoft YaHei", sans-serif;
+            max-width: 900px;
+            margin: 20px auto;
+            padding: 20px;
+            line-height: 1.8;
+        }
+        .container {
+            margin-bottom: 30px;
+            padding: 20px;
+            border: 1px solid #eee;
+            border-radius: 8px;
+            background: #fafafa;
+        }
+        h2 {
+            color: #2c3e50;
+            margin-bottom: 20px;
+        }
+        .matrix-input {
+            margin: 15px 0;
+        }
+        input {
+            width: 70px;
+            padding: 8px;
+            margin: 5px;
+            text-align: center;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        .radio-group {
+            margin: 15px 0;
+            font-size: 15px;
+        }
+        button {
+            background: #28a745;
+            color: white;
+            border: none;
+            padding: 10px 30px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 10px 0;
+        }
+        button:hover {
+            background: #218838;
+        }
+        #result {
+            margin-top: 20px;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            font-size: 16px;
+            white-space: pre-line;
+            border: 1px solid #eee;
+            font-family: "Courier New", monospace; /* 等宽字体保证对齐 */
+        }
+        .tip {
+            color: #666;
+            font-size: 14px;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+    <h1>📐 行列式&线性方程组求解计算器（2/3阶）</h1>
+
+    <div class="container">
+        <h2>1. 选择矩阵阶数</h2>
+        <div class="radio-group">
+            <label><input type="radio" name="matrixOrder" value="2"> 2阶矩阵</label>
+            <label><input type="radio" name="matrixOrder" value="3" checked> 3阶矩阵</label>
+        </div>
+
+        <h2>2. 输入系数矩阵 A 元素</h2>
+        <!-- 2阶矩阵输入区 -->
+        <div id="matrix2" class="matrix-input" style="display: none;">
+            <input id="m2_00" value="1" step="any"> <input id="m2_01" value="2" step="any"><br>
+            <input id="m2_10" value="3" step="any"> <input id="m2_11" value="4" step="any">
+        </div>
+
+        <!-- 3阶矩阵输入区 -->
+        <div id="matrix3" class="matrix-input">
+            <input id="m3_00" value="1" step="any"> <input id="m3_01" value="2" step="any"> <input id="m3_02" value="-1" step="any"><br>
+            <input id="m3_10" value="3" step="any"> <input id="m3_11" value="-2" step="any"> <input id="m3_12" value="1" step="any"><br>
+            <input id="m3_20" value="1" step="any"> <input id="m3_21" value="-1" step="any"> <input id="m3_22" value="-1" step="any">
+        </div>
+
+        <h2>3. 选择方程组类型</h2>
+        <div class="radio-group">
+            <label><input type="radio" name="eqType" value="homogeneous"> 齐次线性方程组 (Ax=0)</label>
+            <label><input type="radio" name="eqType" value="nonhomogeneous" checked> 非齐次线性方程组 (Ax=b)</label>
+        </div>
+
+        <!-- 非齐次方程组常数项b输入 -->
+        <div id="bVector" style="display: block; margin-top: 10px;">
+            <h3>非齐次方程组常数项 b 向量：</h3>
+            <div id="b2" style="display: none;">
+                <input id="b2_0" value="0" step="any"> <input id="b2_1" value="0" step="any">
+            </div>
+            <div id="b3" style="display: block;">
+                <input id="b3_0" value="0" step="any"> <input id="b3_1" value="4" step="any"> <input id="b3_2" value="6" step="any">
+            </div>
+        </div>
+
+        <button onclick="calculateAll()">计算行列式 & 完整求解方程组</button>
+        <div id="result">请点击计算按钮...</div>
+        <div class="tip">
+            说明：<br>
+            1. 齐次方程组 Ax=0：|A|≠0→唯一零解；|A|=0→无穷多非零解<br>
+            2. 非齐次方程组 Ax=b：<br>
+               - r(A)=r([A|b])=n→唯一解；r(A)=r([A|b])<n→无穷多解；r(A)≠r([A|b])→无解<br>
+               - 矩阵秩计算采用严谨高斯消元法，通解格式精准对齐
+        </div>
+    </div>
+
+    <script>
+        // 切换矩阵阶数/方程组类型显示
+        const orderRadios = document.getElementsByName('matrixOrder');
+        const eqRadios = document.getElementsByName('eqType');
+        const matrix2 = document.getElementById('matrix2');
+        const matrix3 = document.getElementById('matrix3');
+        const bVector = document.getElementById('bVector');
+        const b2 = document.getElementById('b2');
+        const b3 = document.getElementById('b3');
+        
+        // 阶数切换
+        orderRadios.forEach(radio => {
+            radio.addEventListener('change', function() {
+                if (this.value === '2') {
+                    matrix2.style.display = 'block';
+                    matrix3.style.display = 'none';
+                    if (document.querySelector('input[name="eqType"][value="nonhomogeneous"]').checked) {
+                        b2.style.display = 'block';
+                        b3.style.display = 'none';
+                    }
+                } else {
+                    matrix2.style.display = 'none';
+                    matrix3.style.display = 'block';
+                    if (document.querySelector('input[name="eqType"][value="nonhomogeneous"]').checked) {
+                        b2.style.display = 'none';
+                        b3.style.display = 'block';
+                    }
+                }
+            });
+        });
+
+        // 方程组类型切换
+        eqRadios.forEach(radio => {
+            radio.addEventListener('change', function() {
+                if (this.value === 'nonhomogeneous') {
+                    bVector.style.display = 'block';
+                    if (document.querySelector('input[name="matrixOrder"][value="2"]').checked) {
+                        b2.style.display = 'block';
+                        b3.style.display = 'none';
+                    } else {
+                        b2.style.display = 'none';
+                        b3.style.display = 'block';
+                    }
+                } else {
+                    bVector.style.display = 'none';
+                }
+            });
+        });
+
+        // 工具函数：将浮点数转为整数（处理精度问题）
+        function toInt(num) {
+            // 四舍五入后转整数（解决浮点精度误差）
+            return Math.round(num);
+        }
+
+        // 核心：重构矩阵秩计算算法（严谨高斯消元法）
+        function matrixRank(matrix) {
+            // 深拷贝矩阵，避免修改原数据
+            let mat = JSON.parse(JSON.stringify(matrix));
+            let rows = mat.length;
+            let cols = mat[0].length;
+            let rank = 0;
+
+            // 高斯消元：化为行阶梯形
+            for (let col = 0; col < cols && rank < rows; col++) {
+                // 1. 找主元（当前列中绝对值最大的元素，避免除以0）
+                let pivotRow = -1;
+                let maxVal = 0;
+                for (let row = rank; row < rows; row++) {
+                    if (Math.abs(mat[row][col]) > maxVal) {
+                        maxVal = Math.abs(mat[row][col]);
+                        pivotRow = row;
+                    }
+                }
+
+                // 2. 若无主元，跳过当前列
+                if (maxVal < 1e-10) continue;
+
+                // 3. 交换主元行到当前rank行
+                [mat[rank], mat[pivotRow]] = [mat[pivotRow], mat[rank]];
+
+                // 4. 消去下方所有行的当前列元素
+                for (let row = rank + 1; row < rows; row++) {
+                    let factor = mat[row][col] / mat[rank][col];
+                    for (let c = col; c < cols; c++) {
+                        mat[row][c] -= factor * mat[rank][c];
+                        // 精度修正：极小值视为0
+                        if (Math.abs(mat[row][c]) < 1e-10) mat[row][c] = 0;
+                    }
+                }
+
+                // 5. 秩+1
+                rank++;
+            }
+
+            return rank;
+        }
+
+        // 工具函数2：行最简形变换（RREF）→ 整数输出
+        function rref(matrix) {
+            let mat = JSON.parse(JSON.stringify(matrix));
+            let rows = mat.length;
+            let cols = mat[0].length;
+            let rank = 0;
+
+            for (let col = 0; col < cols && rank < rows; col++) {
+                // 找主元
+                let pivotRow = -1;
+                let maxVal = 0;
+                for (let row = rank; row < rows; row++) {
+                    if (Math.abs(mat[row][col]) > maxVal) {
+                        maxVal = Math.abs(mat[row][col]);
+                        pivotRow = row;
+                    }
+                }
+                if (maxVal < 1e-10) continue;
+
+                // 交换行
+                [mat[rank], mat[pivotRow]] = [mat[pivotRow], mat[rank]];
+
+                // 归一化主元行
+                let pivotVal = mat[rank][col];
+                for (let c = col; c < cols; c++) {
+                    mat[rank][c] /= pivotVal;
+                    if (Math.abs(mat[rank][c]) < 1e-10) mat[rank][c] = 0;
+                }
+
+                // 消去上下所有行的主元列
+                for (let row = 0; row < rows; row++) {
+                    if (row !== rank && Math.abs(mat[row][col]) > 1e-10) {
+                        let factor = mat[row][col];
+                        for (let c = col; c < cols; c++) {
+                            mat[row][c] -= factor * mat[rank][c];
+                            if (Math.abs(mat[row][c]) < 1e-10) mat[row][c] = 0;
+                        }
+                    }
+                }
+
+                rank++;
+            }
+
+            // 转为整数
+            for (let i = 0; i < rows; i++) {
+                for (let j = 0; j < cols; j++) {
+                    mat[i][j] = toInt(mat[i][j]);
+                }
+            }
+
+            return mat;
+        }
+
+        // 工具函数3：克拉默法则求解唯一解（3阶）→ 整数输出
+        function cramerRule3(A, b) {
+            const detA = A[0][0]*(A[1][1]*A[2][2] - A[1][2]*A[2][1]) - A[0][1]*(A[1][0]*A[2][2] - A[1][2]*A[2][0]) + A[0][2]*(A[1][0]*A[2][1] - A[1][1]*A[2][0]);
+            if (Math.abs(detA) < 1e-10) return null;
+
+            // 构造A1, A2, A3
+            const A1 = [
+                [b[0], A[0][1], A[0][2]],
+                [b[1], A[1][1], A[1][2]],
+                [b[2], A[2][1], A[2][2]]
+            ];
+            const A2 = [
+                [A[0][0], b[0], A[0][2]],
+                [A[1][0], b[1], A[1][2]],
+                [A[2][0], b[2], A[2][2]]
+            ];
+            const A3 = [
+                [A[0][0], A[0][1], b[0]],
+                [A[1][0], A[1][1], b[1]],
+                [A[2][0], A[2][1], b[2]]
+            ];
+
+            // 计算各行列式
+            const detA1 = A1[0][0]*(A1[1][1]*A1[2][2] - A1[1][2]*A1[2][1]) - A1[0][1]*(A1[1][0]*A1[2][2] - A1[1][2]*A1[2][0]) + A1[0][2]*(A1[1][0]*A1[2][1] - A1[1][1]*A1[2][0]);
+            const detA2 = A2[0][0]*(A2[1][1]*A2[2][2] - A2[1][2]*A2[2][1]) - A2[0][1]*(A2[1][0]*A2[2][2] - A2[1][2]*A2[2][0]) + A2[0][2]*(A2[1][0]*A2[2][1] - A2[1][1]*A2[2][0]);
+            const detA3 = A3[0][0]*(A3[1][1]*A3[2][2] - A3[1][2]*A3[2][1]) - A3[0][1]*(A3[1][0]*A3[2][2] - A3[1][2]*A3[2][0]) + A3[0][2]*(A3[1][0]*A3[2][1] - A3[1][1]*A3[2][0]);
+
+            // 转为整数
+            return [toInt(detA1/detA), toInt(detA2/detA), toInt(detA3/detA)];
+        }
+
+        // 工具函数4：从行最简形提取唯一解→整数
+        function extractUniqueSolution(rrefMat, order) {
+            let solution = [];
+            for (let i = 0; i < order; i++) {
+                solution.push(toInt(rrefMat[i][order]));
+            }
+            return solution;
+        }
+
+        // ========== 核心优化：通解格式精准对齐 ==========
+        function deriveGeneralSolution3(rrefMat) {
+            // 分析主元列和自由列
+            let pivotCols = [];
+            let freeCols = [];
+            for (let col = 0; col < 3; col++) {
+                let hasPivot = false;
+                let pivotRow = -1;
+                for (let row = 0; row < 3; row++) {
+                    if (Math.abs(rrefMat[row][col] - 1) < 1e-10) {
+                        hasPivot = true;
+                        pivotRow = row;
+                        break;
+                    }
+                }
+                if (hasPivot) {
+                    pivotCols.push({col: col, row: pivotRow});
+                } else {
+                    freeCols.push(col);
+                }
+            }
+
+            // 构造通解（精准对齐格式）
+            let generalSolution = '';
+            if (freeCols.length === 1) {
+                const freeCol = freeCols[0] + 1; // 自由未知量编号（x1/x2/x3）
+                let baseVec = [];
+                let paramVec = [];
+
+                // 从行最简形提取基础解系（转整数）
+                if (freeCol === 3) { // x3为自由未知量
+                    const x1_const = toInt(rrefMat[0][3]);
+                    const x1_coeff = toInt(rrefMat[0][2]);
+                    const x2_const = toInt(rrefMat[1][3]);
+                    const x2_coeff = toInt(rrefMat[1][2]);
+
+                    baseVec = [x1_const, x2_const, 0];
+                    paramVec = [x1_coeff, x2_coeff, 1];
+
+                    // 处理符号显示
+                    const x1Sign = x1_coeff >= 0 ? '+' : '';
+                    const x2Sign = x2_coeff >= 0 ? '+' : '';
+
+                    // 精准对齐的通解格式（等宽字符+空格对齐）
+                    generalSolution = `自由未知量：x${freeCol}（k为任意常数）
+由行最简形得：
+x₁ = ${x1_const} ${x1Sign} ${x1_coeff}x${freeCol}
+x₂ = ${x2_const} ${x2Sign} ${x2_coeff}x${freeCol}
+x₃ = x${freeCol}
+
+通解表达式：
+X = ⎛ ${baseVec[0]} ⎞ + k⎛ ${paramVec[0]} ⎞
+    ⎜ ${baseVec[1]} ⎟   ⎜ ${paramVec[1]} ⎟
+    ⎝ ${baseVec[2]} ⎠   ⎝ ${paramVec[2]} ⎠`;
+                } else if (freeCol === 2) { // x2为自由未知量
+                    const x1_const = toInt(rrefMat[0][3]);
+                    const x1_coeff = toInt(rrefMat[0][1]);
+                    const x3_const = toInt(rrefMat[2][3]);
+                    const x3_coeff = toInt(rrefMat[2][1]);
+
+                    baseVec = [x1_const, 0, x3_const];
+                    paramVec = [x1_coeff, 1, x3_coeff];
+
+                    const x1Sign = x1_coeff >= 0 ? '+' : '';
+                    const x3Sign = x3_coeff >= 0 ? '+' : '';
+
+                    generalSolution = `自由未知量：x${freeCol}（k为任意常数）
+由行最简形得：
+x₁ = ${x1_const} ${x1Sign} ${x1_coeff}x${freeCol}
+x₂ = x${freeCol}
+x₃ = ${x3_const} ${x3Sign} ${x3_coeff}x${freeCol}
+
+通解表达式：
+X = ⎛ ${baseVec[0]} ⎞ + k⎛ ${paramVec[0]} ⎞
+    ⎜ ${baseVec[1]} ⎟   ⎜ ${paramVec[1]} ⎟
+    ⎝ ${baseVec[2]} ⎠   ⎝ ${paramVec[2]} ⎠`;
+                } else if (freeCol === 1) { // x1为自由未知量
+                    const x2_const = toInt(rrefMat[1][3]);
+                    const x2_coeff = toInt(rrefMat[1][0]);
+                    const x3_const = toInt(rrefMat[2][3]);
+                    const x3_coeff = toInt(rrefMat[2][0]);
+
+                    baseVec = [0, x2_const, x3_const];
+                    paramVec = [1, x2_coeff, x3_coeff];
+
+                    const x2Sign = x2_coeff >= 0 ? '+' : '';
+                    const x3Sign = x3_coeff >= 0 ? '+' : '';
+
+                    generalSolution = `自由未知量：x${freeCol}（k为任意常数）
+由行最简形得：
+x₁ = x${freeCol}
+x₂ = ${x2_const} ${x2Sign} ${x2_coeff}x${freeCol}
+x₃ = ${x3_const} ${x3Sign} ${x3_coeff}x${freeCol}
+
+通解表达式：
+X = ⎛ ${baseVec[0]} ⎞ + k⎛ ${paramVec[0]} ⎞
+    ⎜ ${baseVec[1]} ⎟   ⎜ ${paramVec[1]} ⎟
+    ⎝ ${baseVec[2]} ⎠   ⎝ ${paramVec[2]} ⎠`;
+                }
+            } else if (freeCols.length === 2) {
+                generalSolution = `自由未知量：x${freeCols[0]+1}、x${freeCols[1]+1}（k₁、k₂为任意常数）
+通解包含两个参数，形式为：
+X = ⎛ 特解₁ ⎞ + k₁⎛ 解系1₁ ⎞ + k₂⎛ 解系2₁ ⎞
+    ⎜ 特解₂ ⎟   ⎜ 解系1₂ ⎟   ⎜ 解系2₂ ⎟
+    ⎝ 特解₃ ⎠   ⎝ 解系1₃ ⎠   ⎝ 解系2₃ ⎠`;
+            }
+
+            return generalSolution;
+        }
+
+        // 核心计算函数
+        function calculateAll() {
+            let det = 0;
+            let matrixStr = '';
+            let A = [];
+            let order = document.querySelector('input[name="matrixOrder"]:checked').value;
+            let eqType = document.querySelector('input[name="eqType"]:checked').value;
+
+            // 1. 读取矩阵并计算行列式（转整数）
+            if (order === '2') {
+                const m00 = toInt(parseFloat(document.getElementById('m2_00').value) || 0);
+                const m01 = toInt(parseFloat(document.getElementById('m2_01').value) || 0);
+                const m10 = toInt(parseFloat(document.getElementById('m2_10').value) || 0);
+                const m11 = toInt(parseFloat(document.getElementById('m2_11').value) || 0);
+                
+                A = [[m00, m01], [m10, m11]];
+                det = toInt(m00 * m11 - m01 * m10);
+                matrixStr = `[ ${m00}, ${m01} ]
+[ ${m10}, ${m11} ]`;
+            } else if (order === '3') {
+                const m00 = toInt(parseFloat(document.getElementById('m3_00').value) || 0);
+                const m01 = toInt(parseFloat(document.getElementById('m3_01').value) || 0);
+                const m02 = toInt(parseFloat(document.getElementById('m3_02').value) || 0);
+                const m10 = toInt(parseFloat(document.getElementById('m3_10').value) || 0);
+                const m11 = toInt(parseFloat(document.getElementById('m3_11').value) || 0);
+                const m12 = toInt(parseFloat(document.getElementById('m3_12').value) || 0);
+                const m20 = toInt(parseFloat(document.getElementById('m3_20').value) || 0);
+                const m21 = toInt(parseFloat(document.getElementById('m3_21').value) || 0);
+                const m22 = toInt(parseFloat(document.getElementById('m3_22').value) || 0);
+                
+                A = [[m00, m01, m02], [m10, m11, m12], [m20, m21, m22]];
+                det = toInt(m00*(m11*m22 - m12*m21) - m01*(m10*m22 - m12*m20) + m02*(m10*m21 - m11*m20));
+                matrixStr = `[ ${m00}, ${m01}, ${m02} ]
+[ ${m10}, ${m11}, ${m12} ]
+[ ${m20}, ${m21}, ${m22} ]`;
+            }
+
+            // 2. 方程组求解核心逻辑
+            let eqAnalysis = '';
+            let augmentedMatrix = [];
+            let b = [];
+            let bStr = '';
+
+            if (eqType === 'homogeneous') {
+                // 齐次方程组 Ax=0
+                const rankA = matrixRank(A);
+                const n = parseInt(order);
+                eqAnalysis = `齐次线性方程组 Ax=0 求解结果：
+- 行列式 |A| = ${det}
+- 系数矩阵秩 r(A) = ${rankA}，未知数个数 n = ${n}
+
+${det !== 0 ? `✅ 唯一解：
+x₁ = 0，x₂ = 0 ${order === '3' ? '，x₃ = 0' : ''}（零解）` : `✅ 无穷多非零解：
+自由未知量个数 = ${n - rankA}
+通解：X = k₁×ξ₁ + k₂×ξ₂ + ...（ξ为基础解系，k为任意常数）`}`;
+            } else {
+                // 非齐次方程组 Ax=b
+                if (order === '2') {
+                    b = [toInt(parseFloat(document.getElementById('b2_0').value) || 0), toInt(parseFloat(document.getElementById('b2_1').value) || 0)];
+                    bStr = `[ ${b[0]}, ${b[1]} ]^T`;
+                    augmentedMatrix = [[A[0][0], A[0][1], b[0]], [A[1][0], A[1][1], b[1]]];
+                } else {
+                    b = [toInt(parseFloat(document.getElementById('b3_0').value) || 0), toInt(parseFloat(document.getElementById('b3_1').value) || 0), toInt(parseFloat(document.getElementById('b3_2').value) || 0)];
+                    bStr = `[ ${b[0]}, ${b[1]}, ${b[2]} ]^T`;
+                    augmentedMatrix = [[A[0][0], A[0][1], A[0][2], b[0]], [A[1][0], A[1][1], A[1][2], b[1]], [A[2][0], A[2][1], A[2][2], b[2]]];
+                }
+
+                // 精准计算秩
+                const rankA = matrixRank(A);
+                const rankAug = matrixRank(augmentedMatrix);
+                const n = parseInt(order);
+                const rrefMat = rref(augmentedMatrix);
+
+                // 行最简形字符串（整数）
+                let rrefStr = '增广矩阵行最简形：\n';
+                rrefMat.forEach(row => {
+                    rrefStr += `[ ${row.join(', ')} ]\n`;
+                });
+
+                // 分情况求解
+                let solutionStr = '';
+                if (rankA !== rankAug) {
+                    solutionStr = `❌ 无解
+原因：系数矩阵秩 r(A) = ${rankA} ≠ 增广矩阵秩 r([A|b]) = ${rankAug}`;
+                } else {
+                    if (rankA === n) {
+                        // 唯一解：克拉默法则 + 行最简形验证（整数）
+                        let solution = [];
+                        if (order === '3') {
+                            solution = cramerRule3(A, b);
+                        } else {
+                            solution = extractUniqueSolution(rrefMat, 2);
+                        }
+                        solutionStr = `✅ 唯一解（克拉默法则）：
+${order === '2' ? `x₁ = ${solution[0]}，x₂ = ${solution[1]}` : `x₁ = ${solution[0]}，x₂ = ${solution[1]}，x₃ = ${solution[2]}`}`;
+                    } else {
+                        // 无穷多解：推导通解（精准对齐格式）
+                        let generalSol = '';
+                        if (order === '3') {
+                            generalSol = deriveGeneralSolution3(rrefMat);
+                        } else {
+                            generalSol = `自由未知量：x${rankA+1}（k为任意常数）
+通解：
+X = ⎛ 特解₁ ⎞ + k⎛ 解系₁ ⎞
+    ⎝ 特解₂ ⎠   ⎝ 解系₂ ⎠`;
+                        }
+                        solutionStr = `✅ 无穷多解：
+${generalSol}`;
+                    }
+                }
+
+                // 最终分析
+                eqAnalysis = `非齐次线性方程组 Ax=b 求解结果：
+- 常数项 b = ${bStr}
+- 行列式 |A| = ${det}
+- 系数矩阵秩 r(A) = ${rankA}，增广矩阵秩 r([A|b]) = ${rankAug}，未知数个数 n = ${n}
+
+${rrefStr}
+${solutionStr}`;
+            }
+
+            // 3. 输出完整结果（纯整数+精准排版）
+            document.getElementById('result').innerText = 
+`📝 完整计算结果：
+1. 系数矩阵 A（${order}阶）：
+${matrixStr}
+
+2. 行列式 |A| = ${det}
+
+3. 方程组求解：
+${eqAnalysis}`;
+        }
+    </script>
+</body>
+</html>
