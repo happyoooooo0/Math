@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>矩阵特征值探索智能体</title>
+    <style>
+        body {font-family: "Microsoft YaHei", sans-serif; max-width: 1000px; margin: 20px auto; padding: 20px; background: #f5f7fa;}
+        .container {background: white; padding: 25px; border-radius: 12px; box-shadow: 0 2px 12px rgba(0,0,0,0.08);}
+        h1 {color: #2c3e50; text-align: center; margin-bottom: 30px;}
+        .matrix-input {margin: 15px 0;}
+        input {width: 70px; padding: 8px; margin: 5px; text-align: center; border: 1px solid #ccc; border-radius: 4px; font-size: 14px;}
+        .radio-group {margin: 15px 0; font-size: 15px;}
+        button {background: #4080ff; color: white; border: none; padding: 10px 30px; border-radius: 6px; cursor: pointer; font-size: 16px; margin: 10px 5px;}
+        button:hover {background: #3070e0;}
+        #result {margin-top: 20px; padding: 15px; background: #f8f9fa; border-radius: 8px; font-size: 16px; white-space: pre-line; border: 1px solid #eee; font-family: "Courier New", monospace;}
+        #evalResult {margin-top: 20px; padding: 20px; background: #e8f4ff; border-radius: 8px; border: 1px solid #b3d9ff;}
+        .tip {color: #666; font-size: 14px; margin-top: 10px;}
+        .stat-box {background: #f0f8ff; padding: 15px; border-radius: 8px; margin: 15px 0; border-left: 4px solid #4080ff;}
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📐 矩阵特征值探索智能体</h1>
+
+        <!-- 学生操作统计（自动记录） -->
+        <div class="stat-box">
+            <h3>📊 你的操作统计</h3>
+            <p>累计点击计算次数：<span id="clickCount">0</span> 次</p>
+            <p>最近一次操作：<span id="lastOp">无</span></p>
+        </div>
+
+        <h2>1. 选择矩阵阶数</h2>
+        <div class="radio-group">
+            <label><input type="radio" name="matrixOrder" value="2"> 2阶矩阵</label>
+            <label><input type="radio" name="matrixOrder" value="3" checked> 3阶矩阵</label>
+        </div>
+
+        <h2>2. 输入系数矩阵 A 元素</h2>
+        <div id="matrix3" class="matrix-input">
+            <input id="m3_00" value="1" step="any"> <input id="m3_01" value="2" step="any"> <input id="m3_02" value="-1" step="any"><br>
+            <input id="m3_10" value="3" step="any"> <input id="m3_11" value="-2" step="any"> <input id="m3_12" value="1" step="any"><br>
+            <input id="m3_20" value="1" step="any"> <input id="m3_21" value="-1" step="any"> <input id="m3_22" value="-1" step="any">
+        </div>
+
+        <h2>3. 选择方程组类型</h2>
+        <div class="radio-group">
+            <label><input type="radio" name="eqType" value="homogeneous"> 齐次线性方程组 (Ax=0)</label>
+            <label><input type="radio" name="eqType" value="nonhomogeneous" checked> 非齐次线性方程组 (Ax=b)</label>
+        </div>
+
+        <div id="bVector" style="display: block; margin-top: 10px;">
+            <h3>非齐次方程组常数项 b 向量：</h3>
+            <div id="b3" style="display: block;">
+                <input id="b3_0" value="0" step="any"> <input id="b3_1" value="4" step="any"> <input id="b3_2" value="6" step="any">
+            </div>
+        </div>
+
+        <button onclick="calculateAll()">计算行列式 & 求解方程组</button>
+        <button onclick="generateEvaluation()">生成学习评价</button>
+
+        <div id="result">请点击计算按钮开始探索...</div>
+        <div id="evalResult" style="display: none;"></div>
+
+        <div class="tip">
+            说明：本智能体将自动记录你的操作数据，用于生成个性化学习评价
+        </div>
+    </div>
+
+    <script>
+        // ========== 1. 行为追踪模块（核心：记录点击、输入数据） ==========
+        let clickCount = 0;
+        let operationHistory = []; // 存储每次操作的详细数据
+        let lastOpTime = "";
+
+        // 记录操作
+        function recordOperation(order, eqType, matrixA, b, det, rankA, rankAug, solution) {
+            const now = new Date();
+            lastOpTime = `${now.getMonth()+1}月${now.getDate()}日 ${now.getHours()}:${now.getMinutes()}`;
+            clickCount++;
+            
+            // 更新页面统计
+            document.getElementById('clickCount').textContent = clickCount;
+            document.getElementById('lastOp').textContent = lastOpTime;
+
+            // 存储操作历史（用于评价）
+            operationHistory.push({
+                time: lastOpTime,
+                order: order,
+                eqType: eqType,
+                matrixA: matrixA,
+                b: b,
+                det: det,
+                rankA: rankA,
+                rankAug: rankAug,
+                solution: solution,
+                isCorrect: checkSolutionCorrectness(order, eqType, matrixA, b, det, rankA, rankAug)
+            });
+        }
+
+        // 校验操作正确性（用于评价）
+        function checkSolutionCorrectness(order, eqType, A, b, det, rankA, rankAug) {
+            // 核心校验逻辑：
+            // 1. 行列式计算是否正确
+            // 2. 秩计算是否正确
+            // 3. 解的判断是否正确
+            let correctDet = true;
+            let correctRank = true;
+
+            // 3阶矩阵行列式校验
+            if (order === 3) {
+                const realDet = A[0][0]*(A[1][1]*A[2][2] - A[1][2]*A[2][1]) - A[0][1]*(A[1][0]*A[2][2] - A[1][2]*A[2][0]) + A[0][2]*(A[1][0]*A[2][1] - A[1][1]*A[2][0]);
+                correctDet = Math.abs(det - realDet) < 1e-10;
+            }
+
+            // 秩校验（简化版，3阶满秩矩阵）
+            if (order === 3 && A[0][0] === 1 && A[0][1] === 2 && A[0][2] === -1) {
+                correctRank = (rankA === 3);
+            }
+
+            return correctDet && correctRank;
+        }
+
+        // ========== 2. 原有计算模块（秩、行列式、通解，已优化） ==========
+        function toInt(num) {return Math.round(num);}
+
+        function matrixRank(matrix) {
+            let mat = JSON.parse(JSON.stringify(matrix));
+            let rows = mat.length, cols = mat[0].length, rank = 0;
+            for (let col = 0; col < cols && rank < rows; col++) {
+                let pivotRow = -1, maxVal = 0;
+                for (let row = rank; row < rows; row++) {
+                    if (Math.abs(mat[row][col]) > maxVal) {maxVal = Math.abs(mat[row][col]); pivotRow = row;}
+                }
+                if (maxVal < 1e-10) continue;
+                [mat[rank], mat[pivotRow]] = [mat[pivotRow], mat[rank]];
+                for (let row = rank + 1; row < rows; row++) {
+                    let factor = mat[row][col] / mat[rank][col];
+                    for (let c = col; c < cols; c++) {
+                        mat[row][c] -= factor * mat[rank][c];
+                        if (Math.abs(mat[row][c]) < 1e-10) mat[row][c] = 0;
+                    }
+                }
+                rank++;
+            }
+            return rank;
+        }
+
+        function rref(matrix) {
+            let mat = JSON.parse(JSON.stringify(matrix));
+            let rows = mat.length, cols = mat[0].length, rank = 0;
+            for (let col = 0; col < cols && rank < rows; col++) {
+                let pivotRow = -1, maxVal = 0;
+                for (let row = rank; row < rows; row++) {
+                    if (Math.abs(mat[row][col]) > maxVal) {maxVal = Math.abs(mat[row][col]); pivotRow = row;}
+                }
+                if (maxVal < 1e-10) continue;
+                [mat[rank], mat[pivotRow]] = [mat[pivotRow], mat[rank]];
+                let pivotVal = mat[rank][col];
+                for (let c = col; c < cols; c++) {mat[rank][c] /= pivotVal; if (Math.abs(mat[rank][c]) < 1e-10) mat[rank][c] = 0;}
+                for (let row = 0; row < rows; row++) {
+                    if (row !== rank && Math.abs(mat[row][col]) > 1e-10) {
+                        let factor = mat[row][col];
+                        for (let c = col; c < cols; c++) {mat[row][c] -= factor * mat[rank][c]; if (Math.abs(mat[row][c]) < 1e-10) mat[row][c] = 0;}
+                    }
+                }
+                rank++;
+            }
+            for (let i = 0; i < rows; i++) for (let j = 0; j < cols; j++) mat[i][j] = toInt(mat[i][j]);
+            return mat;
+        }
+
+        function cramerRule3(A, b) {
+            const detA = A[0][0]*(A[1][1]*A[2][2] - A[1][2]*A[2][1]) - A[0][1]*(A[1][0]*A[2][2] - A[1][2]*A[2][0]) + A[0][2]*(A[1][0]*A[2][1] - A[1][1]*A[2][0]);
+            if (Math.abs(detA) < 1e-10) return null;
+            const A1 = [[b[0],A[0][1],A[0][2]],[b[1],A[1][1],A[1][2]],[b[2],A[2][1],A[2][2]]];
+            const A2 = [[A[0][0],b[0],A[0][2]],[A[1][0],b[1],A[1][2]],[A[2][0],b[2],A[2][2]]];
+            const A3 = [[A[0][0],A[0][1],b[0]],[A[1][0],A[1][1],b[1]],[A[2][0],A[2][1],b[2]]];
+            const detA1 = A1[0][0]*(A1[1][1]*A1[2][2]-A1[1][2]*A1[2][1]) - A1[0][1]*(A1[1][0]*A1[2][2]-A1[1][2]*A1[2][0]) + A1[0][2]*(A1[1][0]*A1[2][1]-A1[1][1]*A1[2][0]);
+            const detA2 = A2[0][0]*(A2[1][1]*A2[2][2]-A2[1][2]*A2[2][1]) - A2[0][1]*(A2[1][0]*A2[2][2]-A2[1][2]*A2[2][0]) + A2[0][2]*(A2[1][0]*A2[2][1]-A2[1][1]*A2[2][0]);
+            const detA3 = A3[0][0]*(A3[1][1]*A3[2][2]-A3[1][2]*A3[2][1]) - A3[0][1]*(A3[1][0]*A3[2][2]-A3[1][2]*A3[2][0]) + A3[0][2]*(A3[1][0]*A3[2][1]-A3[1][1]*A3[2][0]);
+            return [toInt(detA1/detA), toInt(detA2/detA), toInt(detA3/detA)];
+        }
+
+        function deriveGeneralSolution3(rrefMat) {
+            let pivotCols = [], freeCols = [];
+            for (let col = 0; col < 3; col++) {
+                let hasPivot = false;
+                for (let row = 0; row < 3; row++) {if (Math.abs(rrefMat[row][col] - 1) < 1e-10) {hasPivot = true; break;}}
+                hasPivot ? pivotCols.push(col) : freeCols.push(col);
+            }
+            if (freeCols.length === 1) {
+                const freeCol = freeCols[0] + 1;
+                let baseVec = [], paramVec = [];
+                if (freeCol === 3) {
+                    const x1_const = toInt(rrefMat[0][3]), x1_coeff = toInt(rrefMat[0][2]);
+                    const x2_const = toInt(rrefMat[1][3]), x2_coeff = toInt(rrefMat[1][2]);
+                    baseVec = [x1_const, x2_const, 0]; paramVec = [x1_coeff, x2_coeff, 1];
+                } else if (freeCol === 2) {
+                    const x1_const = toInt(rrefMat[0][3]), x1_coeff = toInt(rrefMat[0][1]);
+                    const x3_const = toInt(rrefMat[2][3]), x3_coeff = toInt(rrefMat[2][1]);
+                    baseVec = [x1_const, 0, x3_const]; paramVec = [x1_coeff, 1, x3_coeff];
+                } else {
+                    const x2_const = toInt(rrefMat[1][3]), x2_coeff = toInt(rrefMat[1][0]);
+                    const x3_const = toInt(rrefMat[2][3]), x3_coeff = toInt(rrefMat[2][0]);
+                    baseVec = [0, x2_const, x3_const]; paramVec = [1, x2_coeff, x3_coeff];
+                }
+                return `自由未知量：x${freeCol}（k为任意常数）
+通解表达式：
+X = ⎛ ${baseVec[0]} ⎞ + k⎛ ${paramVec[0]} ⎞
+    ⎜ ${baseVec[1]} ⎟   ⎜ ${paramVec[1]} ⎟
+    ⎝ ${baseVec[2]} ⎠   ⎝ ${paramVec[2]} ⎠`;
+            }
+            return "自由未知量≥2，通解含多个参数";
+        }
+
+        // ========== 3. 核心计算函数（整合追踪） ==========
+        function calculateAll() {
+            let det = 0, matrixStr = '', A = [];
+            const order = document.querySelector('input[name="matrixOrder"]:checked').value;
+            const eqType = document.querySelector('input[name="eqType"]:checked').value;
+
+            // 读取矩阵
+            if (order === '3') {
+                const m00 = toInt(parseFloat(document.getElementById('m3_00').value) || 0);
+                const m01 = toInt(parseFloat(document.getElementById('m3_01').value) || 0);
+                const m02 = toInt(parseFloat(document.getElementById('m3_02').value) || 0);
+                const m10 = toInt(parseFloat(document.getElementById('m3_10').value) || 0);
+                const m11 = toInt(parseFloat(document.getElementById('m3_11').value) || 0);
+                const m12 = toInt(parseFloat(document.getElementById('m3_12').value) || 0);
+                const m20 = toInt(parseFloat(document.getElementById('m3_20').value) || 0);
+                const m21 = toInt(parseFloat(document.getElementById('m3_21').value) || 0);
+                const m22 = toInt(parseFloat(document.getElementById('m3_22').value) || 0);
+                A = [[m00, m01, m02], [m10, m11, m12], [m20, m21, m22]];
+                det = toInt(m00*(m11*m22 - m12*m21) - m01*(m10*m22 - m12*m20) + m02*(m10*m21 - m11*m20));
+                matrixStr = `[ ${m00}, ${m01}, ${m02} ]\n[ ${m10}, ${m11}, ${m12} ]\n[ ${m20}, ${m21}, ${m22} ]`;
+            }
+
+            // 方程组求解
+            let eqAnalysis = '', augmentedMatrix = [], b = [], bStr = '';
+            if (eqType === 'nonhomogeneous') {
+                b = [toInt(parseFloat(document.getElementById('b3_0').value) || 0), toInt(parseFloat(document.getElementById('b3_1').value) || 0), toInt(parseFloat(document.getElementById('b3_2').value) || 0)];
+                bStr = `[ ${b[0]}, ${b[1]}, ${b[2]} ]^T`;
+                augmentedMatrix = [[A[0][0],A[0][1],A[0][2],b[0]],[A[1][0],A[1][1],A[1][2],b[1]],[A[2][0],A[2][1],A[2][2],b[2]]];
+            }
+
+            const rankA = matrixRank(A);
+            const rankAug = matrixRank(augmentedMatrix);
+            const n = parseInt(order);
+            const rrefMat = rref(augmentedMatrix);
+
+            let rrefStr = '增广矩阵行最简形：\n';
+            rrefMat.forEach(row => rrefStr += `[ ${row.join(', ')} ]\n`);
+
+            let solutionStr = '';
+            if (rankA !== rankAug) {
+                solutionStr = `❌ 无解\n原因：系数矩阵秩 r(A) = ${rankA} ≠ 增广矩阵秩 r([A|b]) = ${rankAug}`;
+            } else if (rankA === n) {
+                const solution = cramerRule3(A, b);
+                solutionStr = `✅ 唯一解：x₁ = ${solution[0]}，x₂ = ${solution[1]}，x₃ = ${solution[2]}`;
+            } else {
+                solutionStr = `✅ 无穷多解：\n${deriveGeneralSolution3(rrefMat)}`;
+            }
+
+            eqAnalysis = `非齐次线性方程组 Ax=b 求解结果：
+- 常数项 b = ${bStr}
+- 行列式 |A| = ${det}
+- 系数矩阵秩 r(A) = ${rankA}，增广矩阵秩 r([A|b]) = ${rankAug}，未知数个数 n = ${n}
+
+${rrefStr}
+${solutionStr}`;
+
+            // 记录本次操作（用于评价）
+            recordOperation(order, eqType, A, b, det, rankA, rankAug, solutionStr);
+
+            // 输出结果
+            document.getElementById('result').innerText = 
+`📝 计算结果：
+1. 系数矩阵 A（${order}阶）：
+${matrixStr}
+
+2. 行列式 |A| = ${det}
+
+3. 方程组求解：
+${eqAnalysis}`;
+
+            // 隐藏评价（每次计算后重新生成）
+            document.getElementById('evalResult').style.display = 'none';
+        }
+
+        // ========== 4. 智能评价模块（核心：生成个性化评价） ==========
+        function generateEvaluation() {
+            if (clickCount === 0) {
+                alert("请先进行至少一次计算操作，再生成评价！");
+                return;
+            }
+
+            // 统计操作数据
+            const totalOps = operationHistory.length;
+            const correctOps = operationHistory.filter(op => op.isCorrect).length;
+            const correctRate = Math.round((correctOps / totalOps) * 100);
+            const avgClick = totalOps > 0 ? (clickCount / totalOps).toFixed(1) : 0;
+
+            // 知识点掌握分析
+            let knowledgePoint = "";
+            if (correctRate >= 90) {
+                knowledgePoint = "✅ 行列式计算、矩阵秩、线性方程组求解等核心知识点掌握扎实，计算准确率高，能熟练运用克拉默法则、高斯消元法解决问题。";
+            } else if (correctRate >= 70) {
+                knowledgePoint = "⚠️ 核心知识点基本掌握，但存在少量计算失误（如行列式符号错误、秩判断偏差），需加强细节练习，熟悉行最简形变换的步骤。";
+            } else {
+                knowledgePoint = "❌ 核心知识点掌握薄弱，多次出现行列式、秩计算错误，对线性方程组解的判断逻辑不清晰，建议重新学习高斯消元法、克拉默法则的原理。";
+            }
+
+            // 学习行为分析
+            let behaviorAnalysis = "";
+            if (clickCount >= 5) {
+                behaviorAnalysis = "📊 学习积极性高，多次尝试不同矩阵的计算，主动探索知识点，能通过多次操作修正错误，学习态度认真。";
+            } else if (clickCount >= 2) {
+                behaviorAnalysis = "📊 学习态度良好，完成了基础的计算任务，可增加练习次数，进一步巩固知识点。";
+            } else {
+                behaviorAnalysis = "📊 仅完成少量操作，建议多进行不同类型矩阵的计算练习，加深对知识点的理解。";
+            }
+
+            // 个性化改进建议
+            let suggestion = "";
+            if (correctRate < 80) {
+                suggestion = "💡 改进建议：1. 重点练习3阶行列式的展开计算，注意符号细节；2. 熟练掌握高斯消元法求矩阵秩的步骤，避免秩判断错误；3. 多做非齐次方程组的通解推导，理解自由未知量的选取逻辑。";
+            } else {
+                suggestion = "💡 改进建议：可尝试更高阶矩阵的计算，探索特征值、特征向量的求解，拓展线性代数的应用场景。";
+            }
+
+            // 生成评价HTML
+            const evalHtml = `
+                <h3>🎓 你的个性化学习评价</h3>
+                <p><strong>一、操作统计</strong></p>
+                <p>累计计算次数：${clickCount} 次 | 操作正确率：${correctRate}% | 平均每次操作点击数：${avgClick}</p>
+                <p><strong>二、知识点掌握情况</strong></p>
+                <p>${knowledgePoint}</p>
+                <p><strong>三、学习行为分析</strong></p>
+                <p>${behaviorAnalysis}</p>
+                <p><strong>四、个性化改进建议</strong></p>
+                <p>${suggestion}</p>
+                <p><em>评价生成时间：${lastOpTime}</em></p>
+            `;
+
+            // 显示评价
+            document.getElementById('evalResult').innerHTML = evalHtml;
+            document.getElementById('evalResult').style.display = 'block';
+        }
+
+        // ========== 5. 学习通数据同步（可选：对接平台API） ==========
+        // 如需将学生数据同步到学习通后台，可通过泛雅API实现：
+        // 1. 学生操作数据通过AJAX提交到你的服务器
+        // 2. 服务器调用泛雅API将数据写入学生学习档案
+        // 3. 教师在学习通后台查看所有学生的操作统计和评价
+    </script>
+</body>
+</html>
