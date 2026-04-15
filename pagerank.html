@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>PageRank 交互式计算器</title>
+    <style>
+        body {
+            font-family: "Microsoft YaHei", sans-serif;
+            max-width: 800px;
+            margin: 20px auto;
+            padding: 0 20px;
+        }
+        .input-group {
+            margin: 15px 0;
+        }
+        input {
+            width: 60px;
+            padding: 6px;
+            margin: 3px;
+            text-align: center;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 8px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+        #result {
+            margin: 20px 0;
+            padding: 10px;
+            background: #f8f9fa;
+            border-radius: 5px;
+            white-space: pre-wrap;
+            font-size: 14px;
+        }
+        canvas {
+            width: 100%;
+            height: 300px;
+            margin-top: 10px;
+        }
+    </style>
+    <!-- 引入Chart.js，确保图表能正常渲染 -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+    <h1>PageRank 3×3矩阵计算器</h1>
+    <p>输入3×3转移矩阵，点击计算即可查看权重收敛结果：</p>
+
+    <div class="input-group">
+        <input type="number" id="m00" value="0" step="any">
+        <input type="number" id="m01" value="0" step="any">
+        <input type="number" id="m02" value="1" step="any"><br>
+        <input type="number" id="m10" value="0.5" step="any">
+        <input type="number" id="m11" value="0" step="any">
+        <input type="number" id="m12" value="0" step="any"><br>
+        <input type="number" id="m20" value="0.5" step="any">
+        <input type="number" id="m21" value="1" step="any">
+        <input type="number" id="m22" value="0" step="any"><br>
+        <button onclick="calcPageRank()">计算 PageRank</button>
+    </div>
+
+    <div id="result">请点击计算按钮...</div>
+    <!-- 必须用canvas标签，且ID唯一 -->
+    <canvas id="rankChart"></canvas>
+
+    <script>
+        // 全局变量存储图表实例，避免重复创建
+        let rankChartInstance = null;
+
+        function calcPageRank() {
+            try {
+                // 1. 获取并验证输入值
+                function getNum(id) {
+                    const val = document.getElementById(id).value.trim();
+                    return isNaN(parseFloat(val)) ? 0 : parseFloat(val);
+                }
+
+                // 2. 构建转移矩阵
+                const M = [
+                    [getNum('m00'), getNum('m01'), getNum('m02')],
+                    [getNum('m10'), getNum('m11'), getNum('m12')],
+                    [getNum('m20'), getNum('m21'), getNum('m22')]
+                ];
+
+                // 3. 初始化权重向量
+                let V = [1/3, 1/3, 1/3];
+                const history = [V.slice()]; // 保存每次迭代结果
+                let resultText = `输入的转移矩阵：
+${M[0].map(x => x.toFixed(3)).join(' ')}
+${M[1].map(x => x.toFixed(3)).join(' ')}
+${M[2].map(x => x.toFixed(3)).join(' ')}
+
+迭代过程（共10次）：
+初始权重：${V.map(x => x.toFixed(3)).join(' ')}
+`;
+
+                // 4. 迭代计算PageRank
+                for (let i = 1; i <= 10; i++) {
+                    const newV = [
+                        M[0][0]*V[0] + M[0][1]*V[1] + M[0][2]*V[2],
+                        M[1][0]*V[0] + M[1][1]*V[1] + M[1][2]*V[2],
+                        M[2][0]*V[0] + M[2][1]*V[1] + M[2][2]*V[2]
+                    ];
+                    V = newV;
+                    history.push(V.slice());
+                    resultText += `第${i}次迭代：${V.map(x => x.toFixed(3)).join(' ')}
+`;
+                }
+
+                // 5. 显示文字结果
+                resultText += `
+最终权重：
+网页A：${V[0].toFixed(3)}
+网页B：${V[1].toFixed(3)}
+网页C：${V[2].toFixed(3)}`;
+                document.getElementById('result').textContent = resultText;
+
+                // 6. 绘制收敛曲线
+                const ctx = document.getElementById('rankChart').getContext('2d');
+                // 销毁旧图表，避免重叠
+                if (rankChartInstance) {
+                    rankChartInstance.destroy();
+                }
+                // 创建新图表
+                rankChartInstance = new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: ['初始', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10'],
+                        datasets: [
+                            {
+                                label: '网页A权重',
+                                data: history.map(h => h[0]),
+                                borderColor: '#ff6384',
+                                fill: false,
+                                tension: 0.1
+                            },
+                            {
+                                label: '网页B权重',
+                                data: history.map(h => h[1]),
+                                borderColor: '#36a2eb',
+                                fill: false,
+                                tension: 0.1
+                            },
+                            {
+                                label: '网页C权重',
+                                data: history.map(h => h[2]),
+                                borderColor: '#4bc0c0',
+                                fill: false,
+                                tension: 0.1
+                            }
+                        ]
+                    },
+                    options: {
+                        responsive: true,
+                        plugins: {
+                            title: {
+                                display: true,
+                                text: 'PageRank权重收敛曲线'
+                            },
+                            legend: {
+                                position: 'top'
+                            }
+                        },
+                        scales: {
+                            y: {
+                                title: {
+                                    display: true,
+                                    text: '权重值'
+                                },
+                                beginAtZero: true
+                            },
+                            x: {
+                                title: {
+                                    display: true,
+                                    text: '迭代次数'
+                                }
+                            }
+                        }
+                    }
+                });
+
+            } catch (e) {
+                document.getElementById('result').textContent = `计算出错：${e.message}`;
+            }
+        }
+    </script>
+</body>
+</html>
